@@ -1,0 +1,6 @@
+int a,b,c;
+        void foo(){}
+        string a;
+        int foo(){}
+        int main(){}
+        
