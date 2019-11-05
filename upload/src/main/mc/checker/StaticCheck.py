@@ -15,13 +15,17 @@ class MType:
         self.partype = partype
         self.rettype = rettype
 
+    def __str__(self):
+        return 'MType([' + ','.join([str(i) for i in self.partype]) + '],' + str(self.rettype) + ')'
+
 
 class Symbol:
-    def __init__(self, name, mtype, value=None, kind=Identifier()):
+    def __init__(self, name, mtype, value=None, kind=Identifier(), Is_global=False):
         self.name = name
         self.mtype = mtype
         self.value = value
         self.kind = kind
+        self.Is_global = Is_global
 
     def getKind(self):
         return self.kind
@@ -29,8 +33,9 @@ class Symbol:
     def getName(self):
         return self.name
 
-    # def __eq__(self, other):
-    #     return self.name == other.name and self.mtype == other.mtype and self.kind == other.kind
+    def toGlobal(self):
+        self.Is_global = True
+        return self
 
     @staticmethod
     def getSymbolFromFunction(decl):
@@ -48,17 +53,19 @@ class Symbol:
     # def toString(self):
     #     return self.name + " " + str(self.mtype) + " " + str(self.kind)
 
-# class Checker:
-#     utils = Utils()
-#
-#     @staticmethod
-#     def checkRedeclared(Scope, Symbollist):
-#         newScope = Scope.copy()
-#         for x in Symbollist:
-#             f = Checker.utils.lookup(x.name, newScope, Symbol.getName)
-#             if f is not None:
-#                 raise Redeclared(x.kind, x.name)
-#             newScope.append(x)
+class Checker:
+    utils = Utils()
+
+    @staticmethod
+    def checkRedeclared(scope, symbol_list):
+        new_scope = scope.copy()
+        for x in symbol_list:
+            f = Checker.utils.lookup(x.name, new_scope, Symbol.getName)
+            if f is not None:
+                raise Redeclared(x.kind, x.name)
+            new_scope.append(x)
+        return new_scope
+
 
 class StaticChecker(BaseVisitor, Utils):
 
@@ -77,58 +84,44 @@ class StaticChecker(BaseVisitor, Utils):
         return self.visit(self.ast, StaticChecker.global_envi)
 
     def visitProgram(self, ast, c):
-        # decl_list = [Symbol.getSymbolFromDecl(x) for x in ast.decl]
-        # Checker.checkRedeclared(StaticChecker.global_envi, decl_list)
-        # entryPoint = Symbol('main', MType([], IntType()), kind=Function())
-        # entryPoint1 = Symbol('main', MType([], VoidType()), kind=Function())
-        # if self.lookup(entryPoint, decl_list, lambda x: x) is None and self.lookup(entryPoint, decl_list, lambda x:x) is None:
-        #     raise NoEntryPoint()
-        # visit = [self.visit(decl, decl_list) for decl in ast.decl]
-        visit_list = functools.reduce(lambda env, decl: env + [self.visit(decl, env)], ast.decl, c)
-        res = self.lookup('main', visit_list, lambda x: x.name)
-        if res is not None:
-            if res.mtype != MType([], IntType()) or res.mtype != ([], VoidType()):
-                raise NoEntryPoint()
-        else:
+        decl_list = [Symbol.getSymbolFromDecl(x) for x in ast.decl]
+        decl_list = Checker.checkRedeclared(StaticChecker.global_envi, decl_list)
+        entryPoint1 = Symbol("main", MType([], VoidType()), kind=Function())
+        res = self.lookup(entryPoint1.name, decl_list, lambda x: x.name)
+        if res is None:
             raise NoEntryPoint()
-
+        else:
+            if str(res.mtype) != str(entryPoint1.mtype):
+                raise NoEntryPoint()
+        visit = [self.visit(decl, [decl_list]) for decl in ast.decl]
+        return visit
 
     def visitFuncDecl(self, ast, c):
-        if self.lookup(ast.name.name, c, lambda x: x.name) is None:
-            try:
-                para = functools.reduce(lambda env, decl: env + [self.visit(decl, env)], ast.param, [])
-                # Checker.checkRedeclared([], para)
-            except Redeclared as e:
-                raise Redeclared(Parameter(), e.n)
-            local_variable = functools.reduce(lambda env, decl: env + [self.visit(decl, env)],
-                                            list(filter(lambda x: type(x) is VarDecl, ast.body.member)), para)
-            # local_variable = list(filter(lambda x: type(x) is VarDecl, ast.body.member))
-            # Checker.checkRedeclared(para, local_variable)
-            variable = c + local_variable
-            body_statement = list(map(lambda decl: self.visit(decl, (variable, True)),
-                                            list(filter(lambda x: type(x) is not VarDecl, ast.body.member))))
-            return Symbol.getSymbolFromFunction(ast)
-        else:
-            raise Redeclared(Function(), ast.name.name)
+        # if self.lookup(ast.name.name, c, lambda x: x.name) is None:
+        try:
+            para = [Symbol.getSymbolFromDecl(x) for x in ast.param]
+            para = Checker.checkRedeclared([], para)
+        except Redeclared as e:
+            raise Redeclared(Parameter(), e.n)
+        globl = [[Symbol.getSymbolFromFunction(ast)] + c[0]]
+        local_variable = functools.reduce(lambda env, decl: [Checker.checkRedeclared(env[0], self.visit(decl, env))], ast.body.member, [para] + globl)
+        return [Symbol.getSymbolFromFunction(ast)]
 
     def visitVarDecl(self, ast, c):
-        if self.lookup(ast.variable, c, lambda x: x.name) is None:
-            return Symbol.getSymbolFromVarDecl(ast)
-        else:
-            raise Redeclared(Variable(), ast.variable)
+        return [Symbol.getSymbolFromVarDecl(ast)]
 
-    def visitCallExpr(self, ast, c):
-        at = [self.visit(x, (c[0], False)) for x in ast.param]
-        res = self.lookup(ast.method.name, c[0], lambda x: x.name)
-        if res is None or not type(res.mtype) is MType:
-            raise Undeclared(Function(), ast.method.name)
-        elif len(res.mtype.partype) != len(at):
-            if c[1]:
-                raise TypeMismatchInStatement(ast)
-            else:
-                raise TypeMismatchInExpression(ast)
-        else:
-            return Symbol(res.name, res.mtype)
+    # def visitCallExpr(self, ast, c):
+    #     at = [self.visit(x, (c[0], False)) for x in ast.param]
+    #     res = self.lookup(ast.method.name, c[0], lambda x: x.name)
+    #     if res is None or not type(res.mtype) is MType:
+    #         raise Undeclared(Function(), ast.method.name)
+    #     elif len(res.mtype.partype) != len(at):
+    #         if c[1]:
+    #             raise TypeMismatchInStatement(ast)
+    #         else:
+    #             raise TypeMismatchInExpression(ast)
+    #     else:
+    #         return Symbol(res.name, res.mtype)
 
     def visitIntType(self, ast, c):
         return IntType()
@@ -154,8 +147,16 @@ class StaticChecker(BaseVisitor, Utils):
     def visitIntLiteral(self, ast, c):
         return IntType()
 
+    def visitBlock(self, ast, c):
+        functools.reduce(lambda env, decl: [env[0] + self.visit(decl, env)], ast.member, [[]] + c)
+        return []
+
+    def visitIf(self, ast, c):
+
     def visitId(self, ast, c):
-        if self.lookup(ast.name, c[0], lambda x: x.name) is None:
+        scope = [x for y in c for x in y]
+        res = self.lookup(ast.name, scope, lambda x: x.name)
+        if res is None:
             raise Undeclared(Identifier(), ast.name)
         else:
-            return Symbol(ast.name, [] , kind = Identifier())
+            return []
