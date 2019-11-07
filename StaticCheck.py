@@ -82,6 +82,7 @@ class CheckError:
 
 class StaticChecker(BaseVisitor, Utils):
 
+
     global_envi = [
     Symbol("getInt", MType([], IntType())),
     Symbol("putIntLn", MType([IntType()], VoidType()))
@@ -97,16 +98,18 @@ class StaticChecker(BaseVisitor, Utils):
         return self.visit(self.ast, StaticChecker.global_envi)
 
     def visitProgram(self, ast, c):
-        decl_list = [Symbol.getSymbolFromDecl(x) for x in ast.decl]
-        decl_list = CheckError.checkRedeclared(StaticChecker.global_envi, decl_list)
-        entryPoint1 = Symbol("main", MType([], VoidType()), kind=Function())
-        res = self.lookup(entryPoint1.name, decl_list, lambda x: x.name)
-        if res is None:
+        function_list = [x.name.name for x in filter(lambda x: type(x) is FuncDecl, ast.decl)] + [x.name for x in c]
+        visited_function = [x.name for x in c]
+        decl_list = CheckError.checkRedeclared(StaticChecker.global_envi, [Symbol.getSymbolFromDecl(x) for x in ast.decl])
+        res = self.lookup('main', decl_list, lambda x: x.name)
+        if res is None or type(res.mtype) is not MType:
             raise NoEntryPoint()
-        else:
-            if type(res.kind) is not type(entryPoint1.kind):
-                raise NoEntryPoint()
-        visit = [self.visit(decl, [decl_list]) for decl in ast.decl]
+
+        visit = [self.visit(decl, [decl_list, visited_function]) for decl in ast.decl]
+        function_list.remove('main')
+        check_reachable = list(set(function_list) - set(visited_function))
+        if len(check_reachable) != 0:
+            raise UnreachableFunction(check_reachable[0])
         return visit
 
     def visitFuncDecl(self, ast, c):
@@ -118,29 +121,30 @@ class StaticChecker(BaseVisitor, Utils):
             raise Redeclared(Parameter(), e.n)
         globl = [[Symbol.getSymbolFromFunction(ast)] + c[0]]
         env = [para] + globl
-        # local_variable = functools.reduce(lambda env, decl: [Checker.checkRedeclared(env[0], self.visit(decl, env))] if
-        #             type(decl) is VarDecl else [env[0] + self.visit(decl, (env, True))], ast.body.member, [para] + globl)
+    # local_variable = functools.reduce(lambda env, decl: [Checker.checkRedeclared(env[0], self.visit(decl, env))] if
+    #             type(decl) is VarDecl else [env[0] + self.visit(decl, (env, True))], ast.body.member, [para] + globl)
+        body_statement = []
         for decl in ast.body.member:
             if type(decl) is VarDecl:
                 env = [CheckError.checkRedeclared(env[0], self.visit(decl, env)), env[1]]
             else:
-                self.visit(decl, (env, True))
+                body_statement += self.visit(decl, (env, ast.returnType, False, ast.name.name, c[1]))
         return [Symbol.getSymbolFromFunction(ast)]
 
     def visitVarDecl(self, ast, c):
         return [Symbol.getSymbolFromVarDecl(ast)]
 
     def visitIntType(self, ast, c):
-        return [IntType()]
+        return IntType()
 
     def visitVoidType(self, ast, c):
         return VoidType()
 
     def visitFloatType(self, ast, c):
-        return [FloatType()]
+        return FloatType()
 
     def visitBooleanType(self, ast, c):
-        return [BoolType()]
+        return BoolType()
 
     def visitStringType(self, ast, c):
         return StringType()
@@ -154,36 +158,65 @@ class StaticChecker(BaseVisitor, Utils):
     def visitIntLiteral(self, ast, c):
         return [IntType()]
 
+    def visitBooleanLiteral(self, ast, c):
+        return [BoolType()]
+
+    def visitStringLiteral(self, ast, c):
+        return [StringType()]
+
     def visitBlock(self, ast, c):
-        env = [[]] + c[0]
+        scope, function_type, in_loop, function_name, invoked_function = c
+        env = [[]] + scope
         for decl in ast.member:
             if type(decl) is VarDecl:
-                env = [CheckError.checkRedeclared(env[0], self.visit(decl, env))]
+                env = [CheckError.checkRedeclared(env[0], self.visit(decl, env))] + env[::1]
             else:
-                self.visit(decl, (env, True))
-        # functools.reduce(lambda env, decl: [env[0] + self.visit(decl, (env, True))] if
-        # type(decl) is not VarDecl else [Checker.checkRedeclared(env[0], self.visit(decl, env))], ast.member, [[]] + c[0])
+                self.visit(decl, (env, function_type, in_loop, function_name, invoked_function))
+    # functools.reduce(lambda env, decl: [env[0] + self.visit(decl, (env, True))] if
+    # type(decl) is not VarDecl else [Checker.checkRedeclared(env[0], self.visit(decl, env))], ast.member, [[]] + c[0])
         return []
 
     # unfinished
     def visitIf(self, ast, c):
         condition = self.visit(ast.expr, c)
-        if type(condition) is not BoolType:
+        if type(condition[0]) is not BoolType:
             raise TypeMismatchInStatement(ast)
-        stmts1 = [self.visit(x, c) for x in ast.thenStmt]
-        stmts2 = [self.visit(x, c) for x in ast.elseStmt]
+        stmts1 = self.visit(ast.thenStmt, c)
+        if ast.elseStmt is not None:
+            stmts2 = self.visit(ast.elseStmt, c)
+        return [ast]
 
-    def visitDoWhile(self, ast, c):
-        return []
+    def visitDowhile(self, ast, c):
+        scope, function_type, in_loop, function_name, invoked_function = c
+        condition = self.visit(ast.exp, c)
+        if type(condition[0]) is not BoolType:
+            raise TypeMismatchInStatement(ast)
+        stmt_list = [self.visit(x, (scope, function_type, True, function_name, invoked_function)) for x in ast.sl]
+        return [ast]
 
     def visitFor(self, ast, c):
-        return []
+        scope, function_type, in_loop, function_name, invoked_function = c
+        condition1 = self.visit(ast.expr1, c)
+        condition2 = self.visit(ast.expr2, c)
+        condition3 = self.visit(ast.expr3, c)
+        if type(condition1[0]) is not IntType or type(condition3[0]) is not IntType or type(condition2[0]) is not BoolType:
+            raise TypeMismatchInStatement(ast)
+        loopStmt = self.visit(ast.loop, (scope, function_type, True, function_name, invoked_function))
+        return [ast]
 
     def visitBreak(self, ast, c):
-        return []
+        scope, return_type, in_loop, function_name, invoked_function = c
+        if not in_loop:
+            raise BreakNotInLoop()
+        else:
+            return [ast]
 
     def visitContinue(self, ast, c):
-        return []
+        scope, return_type, in_loop, function_name, invoked_function = c
+        if not in_loop:
+            raise ContinueNotInLoop()
+        else:
+            return [ast]
 
     def visitReturn(self, ast, c):
         return []
@@ -195,8 +228,6 @@ class StaticChecker(BaseVisitor, Utils):
         left = type(lefths[0])
         righths = self.visit(ast.right, c)
         right = type(righths[0])
-        if left is StringType() or right is StringType():
-            raise TypeMismatchInExpression(ast)
         if op == '%':
             if left is not IntType or right is not IntType:
                 raise TypeMismatchInExpression(ast)
@@ -210,15 +241,17 @@ class StaticChecker(BaseVisitor, Utils):
                 raise TypeMismatchInExpression(ast)
             return [BoolType()]
         elif op in ['==', '!=']:
-            if left is not right or left not in [IntType, BoolType] or right not in [IntType, BoolType]:
+            if left is not right or left not in [IntType, BoolType]:
                 raise TypeMismatchInExpression(ast)
             return [BoolType()]
         elif op in ['&&', '||']:
-            if left is not BoolType() or right is not BoolType():
+            if left is not BoolType or right is not BoolType:
                 raise TypeMismatchInExpression(ast)
             return [BoolType()]
         elif op == '=':
-            if left is not FloatType:
+            if left in [VoidType, ArrayPointerType, ArrayType]:
+                raise TypeMismatchInExpression(ast)
+            elif left is not FloatType:
                 if right is not left: raise TypeMismatchInExpression(ast)
             else:
                 if right not in [FloatType, IntType]:
@@ -237,11 +270,11 @@ class StaticChecker(BaseVisitor, Utils):
                 raise TypeMismatchInExpression(ast)
         return [exp[0]]
 
-
     def visitCallExpr(self, ast, c):
-        scope = [x for y in c[0] for x in y]
-        at = [self.visit(x, (c[0], False))[0] for x in ast.param]
-        res = self.lookup(ast.method.name, scope, lambda x: x.name if isinstance(x, Symbol) else None)
+        env, return_type, in_loop, function_name, invoked_function = c
+        scope = [x for y in env for x in y]
+        at = [self.visit(x, (env, None, in_loop, function_name, invoked_function))[0] for x in ast.param]
+        res = self.lookup(ast.method.name, scope, lambda x: x.name) #if isinstance(x, Symbol) else None)
         if res is None or type(res.mtype) is not MType:
             raise Undeclared(Function(), ast.method.name)
         elif not CheckError.checkMatchingParameter(at, res.mtype.partype):
@@ -250,12 +283,21 @@ class StaticChecker(BaseVisitor, Utils):
             else:
                 raise TypeMismatchInExpression(ast)
         else:
+            if ast.method.name != function_name and ast.method.name != 'main':
+                invoked_function.append(ast.method.name)
             return [res.mtype.rettype]
+
+    def visitArrayCell(self, ast, c):
+        arrType = self.visit(ast.arr, c)
+        idxType = self.visit(ast.idx, c)
+        if type(arrType[0]) not in [ArrayType, ArrayPointerType] or type(idxType[0]) is not IntType:
+            raise TypeMismatchInExpression(ast)
+        return [arrType[0].eleType]
 
     def visitId(self, ast, c):
         scope = [x for y in c[0] for x in y]
         res = self.lookup(ast.name, scope, lambda x: x.name)
-        if res is None:
+        if res is None or type(res.mtype) is MType:
             raise Undeclared(Identifier(), ast.name)
         else:
             return [res.mtype]
