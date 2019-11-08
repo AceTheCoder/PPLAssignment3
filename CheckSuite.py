@@ -371,6 +371,8 @@ class CheckSuite(unittest.TestCase):
                 int a;
                 float b;
                 boolean c;
+                -10.5454 + 5;
+                a + 3;
                 (a + b) + a;
                 a + c; // Error
             }
@@ -385,6 +387,8 @@ class CheckSuite(unittest.TestCase):
                 int a;
                 float b;
                 boolean c;
+                a - 3;
+                1 - 10.6969;
                 a - b;
                 b - a - a;
                 a - c; //Error
@@ -400,6 +404,8 @@ class CheckSuite(unittest.TestCase):
                 int a;
                 float b;
                 boolean c;
+                a * 365;
+                2 * a;
                 a * b;
                 b * a * a;
                 a * c; //Error
@@ -415,6 +421,8 @@ class CheckSuite(unittest.TestCase):
                 int a;
                 float b;
                 boolean c;
+                a / 10;
+                10 / a;
                 a / b;
                 b / a / a;
                 c / a; //Error
@@ -430,6 +438,8 @@ class CheckSuite(unittest.TestCase):
                 int a;
                 float b;
                 int c,d;
+                a % 2;
+                2 % a;
                 a % c;
                 a % c % d;
                 b % a; // Error
@@ -648,7 +658,7 @@ class CheckSuite(unittest.TestCase):
                 int a, b;
                 float x ,y;
                 a = b = 0; // success
-                arr[a] = (x + y)/ 2 -10; // error since right hand side is Float type
+                arr[a] = (x + y)/ 2 -10;    // error since right hand side is Float type
                 x = foo(a ,y);
             }
         """
@@ -667,7 +677,7 @@ class CheckSuite(unittest.TestCase):
                 int x;
                 float y;
                 a[foo(x, y) + 2 /10 % 5];
-                a[x * y - foo(x,y)]; //Error since x * y - foo(x,y) is float type not int
+                a[x * y - foo(x,y)];        //Error since x * y - foo(x,y) is float type not int
             }
         """
         expect = "Type Mismatch In Expression: ArrayCell(Id(a),BinaryOp(-,BinaryOp(*,Id(x),Id(y)),CallExpr(Id(foo),[Id(x),Id(y)])))"
@@ -683,11 +693,11 @@ class CheckSuite(unittest.TestCase):
             void main(){
                 int i[10], b[10], a [10];
                 int c,d, x;
-                (1 + 1*2 -3/4*5%6) == 2;        //Success
-                !true || !false != true;         //Success
-                i[1 *3 +4/2 - 5%1];              //Success
-                foo(2)[3+x] = a[b[2]] +3;        //Success
-                a[i[9] - b[3] + c - d] != b[12]; //Success
+                (1 + 1*2 -3/4*5%6) == 2;        
+                !true || !false != true;         
+                i[1 *3 +4/2 - 5%1];              
+                foo(2)[3+x] = a[b[2]] +3;        
+                a[i[9] - b[3] + c - d] != b[12]; 
                 foo(3)[true && false] == foo(2)[foo(3)[2] - true]; //Error since index can only be int type
             }
         """
@@ -921,7 +931,7 @@ class CheckSuite(unittest.TestCase):
             int doo(int a, float b){
                 return foo(2)[3+a];
             }
-            float goo(int a, float b){
+            boolean goo(int a, float b){
                 return foo(4)[3+a];
             }
             void main(){ 
@@ -1041,11 +1051,184 @@ class CheckSuite(unittest.TestCase):
         self.assertTrue(TestChecker.test(input, expect, 465))
 
     # Test function not return
-    def test56(self):
+    def test_simple_not_return_function(self):
         """More complex program"""
         input = """
-            int foo() {
+            int goo(){
+                return 1;
+            }
+            int foo() {     //Error
                 int a; 
+            }
+            void main(){ 
+                foo();
+            }
+        """
+        expect = "Function foo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 466))
+
+    def test_if_path_return_function(self):
+        """More complex program"""
+        input = """
+            int goo(){
+                if(true)
+                    return 1;
+                else
+                    return 2;
+            }
+            int foo(){  //Error
+                if(true)
+                    return 1;
+            }
+            void main(){ 
+
+            }
+        """
+        expect = "Function foo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 467))
+
+    def test_return_path_in_while(self):
+        """More complex program"""
+        input = """
+            int goo(){
+                do{
+                    return 0;
+                }
+                while(true);
+                
+                return 1;
+            }
+            int foo(){      //Error
+                do{
+                    return 0;
+                }
+                while(true);
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function foo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 468))
+
+    def test_return_path_in_for(self):
+        """More complex program"""
+        input = """
+            int foo(){
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    return 1;
+                }
+                return 0;
+            }
+            int goo(){      //Error
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    return 1;
+                }
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function goo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 469))
+
+    def test_return_after_break_in_loop(self):
+        """More complex program"""
+        input = """
+             int foo(){
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    if( a == 5){
+                        break;
+                        return 1;
+                    }
+                }
+                return 0;
+            }
+            int goo(){      //Error
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    if( a == 5){
+                        break;
+                        return 1;
+                    }
+                }
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function goo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 470))
+
+    def test_return_after_continue_in_loop(self):
+        """More complex program"""
+        input = """
+            int foo(){
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    if( a == 5){
+                        continue;
+                        return 1;
+                    }
+                }
+                return 0;
+            }
+            int goo(){      //Error
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    if( a == 5){
+                        continue;
+                        return 1;
+                    }
+                }
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function goo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 471))
+
+    def test_no_return_in_loop(self):
+        """More complex program"""
+        input = """
+            int foo(){ 
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    if(true){
+                        return 1;
+                    }
+                }
+                return 1;
+            }
+            int doo(){      //Error
+                int a;
+                for(a = 0; a < 10; a = a+1){
+                    if(true){
+                        continue;
+                    }
+                }
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function doo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 472))
+
+    def test_complex_function_no_return_error(self):
+        """More complex program"""
+        input = """
+            int foo() { 
+                int a;
                 if(true) { 
                     { 
                         { 
@@ -1054,120 +1237,40 @@ class CheckSuite(unittest.TestCase):
                     } 
                 } 
                 else 
-                    for(a;a<3;a = a+1) { 
-                        
+                    for(a;a<3;a= a + 1) { 
                         return 1; 
-                        } 
-            }
-            void main(){ 
-                foo();
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 466))
-
-    def test57(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
+                    } 
+                }
             void main(){ 
 
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 467))
-
-    def test58(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 468))
-
-    def test59(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                a + 1 =4;
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 469))
-
-    def test60(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 470))
-
-    def test61(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 471))
-
-    def test62(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 472))
-
-    def test63(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
+        expect = "Function foo Not Return "
         self.assertTrue(TestChecker.test(input, expect, 473))
 
-    def test64(self):
+    def test_complex_function_no_return_error_extra_test(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
+            int foo(int a, int b){
+                int c;
+                for(c = a; c < b; c = c + 1){
+                    if(c == a/2){
+                        return c;
+                    }
+                    else{
+                        do{
+                            c = c +1;
+                        }
+                        while(c < a/2 -1);
+                        return c;
+                    }
+                }
             }
             void main(){ 
 
             }
         """
-        expect = "Unreachable Function: foo"
+        expect = "Function foo Not Return "
         self.assertTrue(TestChecker.test(input, expect, 474))
 
     def test65(self):

@@ -20,11 +20,10 @@ class MType:
 
 
 class Symbol:
-    def __init__(self, name, mtype, value=None, kind=Identifier()):
+    def __init__(self, name, mtype, value=None):
         self.name = name
         self.mtype = mtype
         self.value = value
-        self.kind = kind
 
     def getName(self):
         return self.name
@@ -32,11 +31,11 @@ class Symbol:
     @staticmethod
     def getSymbolFromFunction(decl):
         para = [x.varType for x in decl.param]
-        return Symbol(decl.name.name, MType(para, decl.returnType), kind=Function())
+        return Symbol(decl.name.name, MType(para, decl.returnType))
 
     @staticmethod
     def getSymbolFromVarDecl(decl):
-        return Symbol(decl.variable, decl.varType, kind=Variable())
+        return Symbol(decl.variable, decl.varType)
 
     @staticmethod
     def getSymbolFromDecl(decl):
@@ -52,7 +51,7 @@ class CheckError:
         for x in symbol_list:
             f = CheckError.utils.lookup(x.name, new_scope, Symbol.getName)
             if f is not None:
-                raise Redeclared(x.kind, x.name)
+                raise Redeclared(Function(), x.name) if type(x.mtype) is MType else Redeclared(Variable(), x.name)
             new_scope.append(x)
         return new_scope
 
@@ -67,19 +66,18 @@ class CheckError:
         if type(patternType) is ArrayPointerType:
             if type(paraType) in [ArrayType, ArrayPointerType] and type(patternType.eleType) is type(paraType.eleType):
                 return True
-        else:
-            if type(paraType) is type(patternType):
-                return True
+        elif type(patternType) is FloatType:
+            if type(paraType) in [IntType, FloatType]: return True
+        elif type(patternType) is type(paraType):
+            return True
         return False
 
     @staticmethod
     def checkReturnStmt(statement_list):
-        for x in statement_list:
-            if isinstance(x, list):
-                if type(x[1]) is not None:
-                    return x[1]
+        for x in filter(lambda y: isinstance(y, list), statement_list):
+            if x[0] is not None:
+                return x[0]
         return None
-
 
 
 class StaticChecker(BaseVisitor, Utils):
@@ -124,9 +122,9 @@ class StaticChecker(BaseVisitor, Utils):
             if type(decl) is VarDecl:
                 env = [CheckError.checkRedeclared(env[0], self.visit(decl, env)), env[1]]
             else:
-                body_statement += self.visit(decl, (env, ast.returnType, False, ast.name.name, c[1]))
+                body_statement.append(self.visit(decl, (env, ast.returnType, False, ast.name.name, c[1])))
         stmt_type = CheckError.checkReturnStmt(body_statement)
-        if type(stmt_type) is not Return and type(ast.returnType) is not VoidType:
+        if type(ast.returnType) is not VoidType and type(stmt_type) is not Return:
             raise FunctionNotReturn(ast.name.name)
         return [Symbol.getSymbolFromFunction(ast)]
 
@@ -141,146 +139,142 @@ class StaticChecker(BaseVisitor, Utils):
             if type(decl) is VarDecl:
                 env = [CheckError.checkRedeclared(env[0], self.visit(decl, env))] + env[::1]
             else:
-                statement_list += self.visit(decl, (env, function_type, in_loop, function_name, invoked_function))
+                statement_list += [self.visit(decl, (env, function_type, in_loop, function_name, invoked_function))]
         return_type = CheckError.checkReturnStmt(statement_list)
-        return [[ast, return_type]]
+        return [return_type]
 
-    # unfinished
+    # Visit statement
     def visitIf(self, ast, c):
         condition = self.visit(ast.expr, c)
-        if type(condition[0]) is not BoolType:
+        if type(condition) is not BoolType:
             raise TypeMismatchInStatement(ast)
-        stmt1 = self.visit(ast.thenStmt, c)
+        stmt1 = [self.visit(ast.thenStmt, c)]
         then_type = CheckError.checkReturnStmt(stmt1)
         else_type = None
         if ast.elseStmt is not None:
-            stmt2 = self.visit(ast.elseStmt, c)
+            stmt2 = [self.visit(ast.elseStmt, c)]
             else_type = CheckError.checkReturnStmt(stmt2)
-        return [[ast, Return()]] if type(then_type) is type(else_type) and type(then_type) is Return else [[ast, None]]
+        return [Return()] if type(then_type) is type(else_type) and type(then_type) is Return else [None]
 
     def visitDowhile(self, ast, c):
         scope, function_type, in_loop, function_name, invoked_function = c
         condition = self.visit(ast.exp, c)
-        if type(condition[0]) is not BoolType:
+        if type(condition) is not BoolType:
             raise TypeMismatchInStatement(ast)
-        stmt_list = functools.reduce(lambda y, x: y + self.visit(x, (scope, function_type, True, function_name, invoked_function)), ast.sl, [])
-        stmt_type = CheckError.checkReturnStmt(stmt_list)
-        return [[ast, stmt_type]] if type(stmt_type) is Return else [[ast, None]]
+        stmt_list = functools.reduce(lambda y, x: y + [self.visit(x, (scope, function_type, True, function_name, invoked_function))], ast.sl, [])
+        # stmt_type = CheckError.checkReturnStmt(stmt_list)
+        # return [stmt_type] if type(stmt_type) is Return else [None]
+        return [None]
 
     def visitFor(self, ast, c):
         scope, function_type, in_loop, function_name, invoked_function = c
         condition1 = self.visit(ast.expr1, c)
         condition2 = self.visit(ast.expr2, c)
         condition3 = self.visit(ast.expr3, c)
-        if type(condition1[0]) is not IntType or type(condition3[0]) is not IntType or type(condition2[0]) is not BoolType:
+        if type(condition1) is not IntType or type(condition3) is not IntType or type(condition2) is not BoolType:
             raise TypeMismatchInStatement(ast)
-        loopStmt = self.visit(ast.loop, (scope, function_type, True, function_name, invoked_function))
-        loop_type = CheckError.checkReturnStmt(loopStmt)
-        return [[ast, loop_type]] if type(loop_type) is Return else [[ast, None]]
+        loopStmts = [self.visit(ast.loop, (scope, function_type, True, function_name, invoked_function))]
+        # loop_type = CheckError.checkReturnStmt(loopStmt)
+        # return [loop_type] if type(loop_type) is Return else [None]
+        return [None]
 
     def visitBreak(self, ast, c):
         scope, return_type, in_loop, function_name, invoked_function = c
         if not in_loop:
             raise BreakNotInLoop()
         else:
-            return [[ast, Break()]]
+            return [Break()]
 
     def visitContinue(self, ast, c):
         scope, return_type, in_loop, function_name, invoked_function = c
         if not in_loop:
             raise ContinueNotInLoop()
         else:
-            return [[ast, Continue()]]
+            return [Continue()]
 
     def visitReturn(self, ast, c):
         scope, return_type, in_loop, function_name, invoked_function = c
-        exprType = self.visit(ast.expr, c)[0] if ast.expr else VoidType()
+        exprType = self.visit(ast.expr, c) if ast.expr else VoidType()
         if not CheckError.checkMatchingType(return_type, exprType):
             raise TypeMismatchInStatement(ast)
-        return [[ast, Return()]]
+        return [Return()]
 
     # Expression
     def visitBinaryOp(self, ast, c):
         op = ast.op
-        lefths = self.visit(ast.left, c)[0]
-        left_type = type(lefths)
-        righths = self.visit(ast.right, c)[0]
-        right_type = type(righths)
+        lefths = self.visit(ast.left, c)
+        righths = self.visit(ast.right, c)
         if op == '%':
-            if left_type is not IntType or right_type is not IntType:
+            if type(lefths) is not IntType or type(righths) is not IntType:
                 raise TypeMismatchInExpression(ast)
-            return [IntType()]
+            return IntType()
         elif op in ['+', '-', '*', '/']:
-            if left_type not in [IntType, FloatType] or right_type not in [IntType, FloatType]:
+            if type(lefths) not in [IntType, FloatType] or type(righths) not in [IntType, FloatType]:
                 raise TypeMismatchInExpression(ast)
-            return [lefths] if left_type is right_type else [FloatType()]
+            return lefths if type(lefths) is type(righths) else FloatType()
         elif op in ['>', '>=', '<', '<=']:
-            if left_type not in [IntType, FloatType] or right_type not in [IntType, FloatType]:
+            if type(lefths) not in [IntType, FloatType] or type(righths) not in [IntType, FloatType]:
                 raise TypeMismatchInExpression(ast)
-            return [BoolType()]
+            return BoolType()
         elif op in ['==', '!=']:
-            if left_type is not right_type or left_type not in [IntType, BoolType]:
+            if type(lefths) is not type(righths) or type(lefths) not in [IntType, BoolType]:
                 raise TypeMismatchInExpression(ast)
-            return [BoolType()]
+            return BoolType()
         elif op in ['&&', '||']:
-            if left_type is not BoolType or right_type is not BoolType:
+            if type(lefths) is not BoolType or type(righths) is not BoolType:
                 raise TypeMismatchInExpression(ast)
-            return [BoolType()]
+            return BoolType()
         elif op == '=':
             if type(ast.left) not in [Id, ArrayCell]:
                 raise NotLeftValue(ast)
-            if left_type in [VoidType, ArrayPointerType, ArrayType]:
+            elif type(lefths)in [VoidType, ArrayPointerType, ArrayType]:
                 raise TypeMismatchInExpression(ast)
-            elif left_type is not FloatType:
-                if right_type is not left_type:
+            elif type(lefths) is not FloatType:
+                if type(righths) is not type(lefths):
                     raise TypeMismatchInExpression(ast)
             else:
-                if right_type not in [FloatType, IntType]:
+                if type(righths) not in [FloatType, IntType]:
                     raise TypeMismatchInExpression(ast)
-            return [lefths]
+            return lefths
 
     def visitUnaryOp(self, ast, c):
-        exp = self.visit(ast.body, c)
-        expType = type(exp[0])
+        exp_type = self.visit(ast.body, c)
         operator = ast.op
         if operator == '!':
-            if expType is not BoolType:
+            if type(exp_type) is not BoolType:
                 raise TypeMismatchInExpression(ast)
         else:
-            if expType not in [IntType, FloatType]:
+            if type(exp_type) not in [IntType, FloatType]:
                 raise TypeMismatchInExpression(ast)
-        return [exp[0]]
+        return exp_type
 
     def visitCallExpr(self, ast, c):
         scope, return_type, in_loop, function_name, invoked_function = c
         env = [x for y in scope for x in y]
-        at = [self.visit(x, (scope, None, in_loop, function_name, invoked_function))[0] for x in ast.param]
+        at = [self.visit(x, (scope, None, in_loop, function_name, invoked_function)) for x in ast.param]
         res = self.lookup(ast.method.name, env, lambda x: x.name)
         if res is None or type(res.mtype) is not MType:
             raise Undeclared(Function(), ast.method.name)
         elif not CheckError.checkMatchingParameter(res.mtype.partype, at):
-            if c[1]:
-                raise TypeMismatchInStatement(ast)
-            else:
-                raise TypeMismatchInExpression(ast)
+            raise TypeMismatchInStatement(ast) if c[1] else TypeMismatchInExpression(ast)
         else:
             if ast.method.name != function_name and ast.method.name != 'main':
                 invoked_function.append(ast.method.name)
-            return [res.mtype.rettype]
+            return res.mtype.rettype
 
     def visitArrayCell(self, ast, c):
         arrType = self.visit(ast.arr, c)
         idxType = self.visit(ast.idx, c)
-        if type(arrType[0]) not in [ArrayType, ArrayPointerType] or type(idxType[0]) is not IntType:
+        if type(arrType) not in [ArrayType, ArrayPointerType] or type(idxType) is not IntType:
             raise TypeMismatchInExpression(ast)
-        return [arrType[0].eleType]
+        return arrType.eleType
 
     def visitId(self, ast, c):
         scope = [x for y in c[0] for x in y]
         res = self.lookup(ast.name, scope, lambda x: x.name)
         if res is None or type(res.mtype) is MType:
             raise Undeclared(Identifier(), ast.name)
-        return [res.mtype]
+        return res.mtype
 
     def visitIntType(self, ast, c):
         return IntType()
@@ -298,14 +292,13 @@ class StaticChecker(BaseVisitor, Utils):
         return StringType()
 
     def visitIntLiteral(self, ast, c):
-        return [IntType()]
+        return IntType()
 
     def visitFloatLiteral(self, ast, c):
-        return [FloatType()]
+        return FloatType()
 
     def visitBooleanLiteral(self, ast, c):
-        return [BoolType()]
+        return BoolType()
 
     def visitStringLiteral(self, ast, c):
-        return [StringType()]
-
+        return StringType()
