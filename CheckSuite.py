@@ -19,11 +19,11 @@ class CheckSuite(unittest.TestCase):
 
     def test_redeclare_function_name(self):
         """More complex program"""
-        input = """int foo() {
+        input = """void foo() {
         }
         void main(){}
         
-        int foo(){ //Error
+        void foo(){ //Error
         }
         """
         expect = "Redeclared Function: foo"
@@ -34,7 +34,7 @@ class CheckSuite(unittest.TestCase):
         input = """int a;
         string b,c, d;
         boolean m;
-        float a; // Error
+        float a;        // Error
         void main(){}
         """
         expect = "Redeclared Variable: a"
@@ -43,7 +43,7 @@ class CheckSuite(unittest.TestCase):
     def test_redeclare_global_array(self):
         """Simple program: int main() {} """
         input = """int a[5];
-        float a; // Error
+        float a;        // Error
         void main(){}
         """
         expect = "Redeclared Variable: a"
@@ -51,8 +51,8 @@ class CheckSuite(unittest.TestCase):
 
     def test_redeclare_global_array_function(self):
         """Simple program: int main() {} """
-        input = """int foo(){}
-        float[] foo(){} //Error
+        input = """int[] foo(){}
+        float[] foo(){}         //Error
         void main(){}
         """
         expect = "Redeclared Function: foo"
@@ -62,7 +62,7 @@ class CheckSuite(unittest.TestCase):
         """Simple program: int main() {} """
         input = """int a,b,c;
         void foo(){}
-        string a(){} // Error
+        string a(){}        // Error
         int foo(){}
         void main(){}
         """
@@ -73,7 +73,7 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             int a;
-            int foo(float b, string b){ //Error
+            int foo(float b, string b){      //Error
             }
             void main(){
             
@@ -85,10 +85,10 @@ class CheckSuite(unittest.TestCase):
     def test_redeclare_parameter_inside_function(self):
         """More complex program"""
         input = """
-            void foo1(){}
+            void foo1(){ return ;}
             void foo(int a, float b){
                 string foo1;
-                string b; //Error
+                string b;           //Error
             }
             void main(){
             
@@ -104,7 +104,7 @@ class CheckSuite(unittest.TestCase):
                 {
                     int a;
                     int b,c,d;
-                    float a;    
+                    float a;        // Error
                 }
             }
             void main(){
@@ -181,15 +181,16 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             void main(){
-                int c;
                 {
-                    c;
-                    d;
-                    int d;
+                    int c;
                 }
+                {
+                    c;  // Error
+                }
+                
             }
         """
-        expect = "Undeclared Identifier: d"
+        expect = "Undeclared Identifier: c"
         self.assertTrue(TestChecker.test(input, expect, 414))
 
     def test_pass_undeclared_variable_to_a_function_call(self):
@@ -198,7 +199,8 @@ class CheckSuite(unittest.TestCase):
             void foo(int a, float b){
                 putIntLn(4);
                 putIntLn(a);
-                putIntLn(c);
+                putIntLn(c);  //Error
+                return;
             }
             void main(){}
         """
@@ -212,23 +214,23 @@ class CheckSuite(unittest.TestCase):
             void main(){
                 a[2];
                 b[4];
-                c[5];
+                c[5]; //Error
             }
         """
         expect = "Undeclared Identifier: c"
         self.assertTrue(TestChecker.test(input, expect, 416))
 
-    def test_undeclared_function(self):
+    def test_simple_undeclared_function(self):
         """More complex program"""
         input = """
             void foo(int a, float b){
-                
+                return ;
             }
             int a;
             float b;
             void main(){
                 foo(a,b);
-                foo1(a,b);
+                foo1(a,b); //Error
             }
         """
         expect = "Undeclared Function: foo1"
@@ -237,7 +239,9 @@ class CheckSuite(unittest.TestCase):
     def test_undeclared_function_inside_block(self):
         """More complex program"""
         input = """
-            void foo(){}
+            void foo(){ 
+                return;
+                }
             void foo1(int a, float b){
                 {
                     foo();
@@ -254,11 +258,12 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             void foo(int a, float b){
+                return;
             }
             float b;
             void main(){
                 foo(getInt(), b);
-                foo(foo1(), b);
+                foo(foo1(), b);  //Error
             }
         """
         expect = "Undeclared Function: foo1"
@@ -268,12 +273,12 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             int foo(int a, float b){
-                
+                return a;
             }
             void main(){
                 int b,a[5];
                 a[b];
-                a[d];
+                a[d]; //Error
             }
         """
         expect = "Undeclared Identifier: d"
@@ -283,7 +288,7 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             int foo(int a, float b){
-                
+                return a;
             }
             void main(){
                 int b,a[5];
@@ -296,11 +301,53 @@ class CheckSuite(unittest.TestCase):
         expect = "Undeclared Function: foo1"
         self.assertTrue(TestChecker.test(input, expect, 421))
 
-    def test_complex_program_undeclared_error(self):
+    def test_undeclared_identifier_in_statement(self):
         """More complex program"""
         input = """
-             void main() { 
-                    foo; 
+            int main()
+            {
+            int array0[7];
+            int array1[7];
+        
+            int sum[7]; 
+            for(i = 0; i < 7; i = i +1) // Error
+                    sum[i] = array0[i] + array1[i];
+            }
+        """
+        expect = "Undeclared Identifier: i"
+        self.assertTrue(TestChecker.test(input, expect, 422))
+
+    def test_complex_program_with_undeclared(self):
+        """More complex program"""
+        input = """
+            int f(){
+                   return 200;     
+            }
+            int main(){
+                    int main;
+                    main = f( );
+                    putIntLn(main);
+                    {
+                        int i;
+                        {
+                        int main;                            
+                        main = f = i = 100;  // Error
+                        putIntLn(i);
+                        putIntLn( main );
+                        }
+                    }
+                    putIntLn(main);
+                    return 0;
+            }
+        """
+        expect = "Undeclared Identifier: f"
+        self.assertTrue(TestChecker.test(input, expect, 423))
+
+    def test_complex_program_with_undeclared_extra_test(self):
+        """More complex program"""
+        input = """
+            void main() { 
+                    foo;  //Error
                     test(); 
             }
 
@@ -310,46 +357,10 @@ class CheckSuite(unittest.TestCase):
 
             int foo(int a){
                      foo(9);
-                     return 3 ;
+                     return 3;
             }
         """
         expect = "Undeclared Identifier: foo"
-        self.assertTrue(TestChecker.test(input, expect, 422))
-
-    def test14(self):
-        """More complex program"""
-        input = """
-            int f(){
-                        
-            }
-            int main(){
-                    int main;
-                    main = f( );
-                    putIntLn(main);
-                    {
-                        int i;
-                        int main;                            
-                        int f;
-                        main = f = i = 100;
-                        putIntLn(i);
-                        putIntLn( main );
-                        putIntLn(f);
-                    }
-                    putIntLn(main);
-            }
-        """
-        expect = "Undeclared Identifier: c"
-        self.assertTrue(TestChecker.test(input, expect, 423))
-
-    def test15(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                c;
-            }
-            void main(){}
-        """
-        expect = "Undeclared Identifier: c"
         self.assertTrue(TestChecker.test(input, expect, 424))
 
     # Check type mismatch in expression
@@ -479,9 +490,11 @@ class CheckSuite(unittest.TestCase):
                 int a,a1;
                 float b,b1;
                 boolean c,c1;
-                a = a1;
-                b = b1;
-                c = c1;
+                string d;
+                a = 10;
+                b = 1.523;
+                c = true;
+                d = "Hello world";
                 b = a1;
                 b = a + a1;
                 a = b1; // Error
@@ -520,14 +533,14 @@ class CheckSuite(unittest.TestCase):
     def test_pass_wrong_type_to_a_function_call(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                
+            void foo(int a, float b[]){
+                return;
             }
             int a;
             void main(){
                boolean b;
-               float c;
-               foo(a,c);
+               float c[5];
+               foo(a, c);
                foo(a, b);
             }
         """
@@ -600,7 +613,7 @@ class CheckSuite(unittest.TestCase):
                 int a, b;
                 (a + ( b - c))/c + d;
                 (b % a) + c * (c + d);
-                (a/2 + b -10)/ 2 -10 * d % c; // Error since d is float so 10 * d is float type
+                (a/2 + b -10)/ 2 -10 * d % c; // Error
             }
         """
         expect = "Type Mismatch In Expression: BinaryOp(%,BinaryOp(*,IntLiteral(10),Id(d)),Id(c))"
@@ -610,7 +623,7 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             int foo(int a, float b){
-                
+                return a;
             }
             void main(){
             int a, b;
@@ -628,7 +641,7 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             int foo(int a, float b){
-                 
+                 return a;
             }
             void main(){
                 int arr[10];
@@ -647,6 +660,7 @@ class CheckSuite(unittest.TestCase):
         input = """
             int foo(int a, float b){
                 a + b;
+                return a;
             }
             void main(){
                 int a[10], d[5];
@@ -663,7 +677,8 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             int[] foo(int a){
-                
+                int b[5];
+                return b; 
             }
             void main(){
                 int i[10], b[10], a [10];
@@ -673,7 +688,7 @@ class CheckSuite(unittest.TestCase):
                 i[1 *3 +4/2 - 5%1];              //Success
                 foo(2)[3+x] = a[b[2]] +3;        //Success
                 a[i[9] - b[3] + c - d] != b[12]; //Success
-                foo(3)[true && false] == foo(2)[foo(3)[2] - true]; //Error
+                foo(3)[true && false] == foo(2)[foo(3)[2] - true]; //Error since index can only be int type
             }
         """
         expect = "Type Mismatch In Expression: ArrayCell(CallExpr(Id(foo),[IntLiteral(3)]),BinaryOp(&&,BooleanLiteral(true),BooleanLiteral(false)))"
@@ -683,15 +698,15 @@ class CheckSuite(unittest.TestCase):
     def test_type_mismatch_in_if_statement(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                int c;
+            void main(){
+                int a;
+                float b;
                 if(a == 0)
                     b + 1;
                 
                 if(b)
                     b + 1;
-            }
-            void main(){}
+                }
         """
         expect = "Type Mismatch In Statement: If(Id(b),BinaryOp(+,Id(b),IntLiteral(1)))"
         self.assertTrue(TestChecker.test(input, expect, 446))
@@ -702,10 +717,11 @@ class CheckSuite(unittest.TestCase):
             void main(){ 
                 int a;
                 float b;
-                if(a == 0)
+                boolean c;
+                if(c)
                     b + 1;
                 else
-                    b + 2;
+                    a + 2;
                 
                 
                 if(b)       // Error
@@ -738,229 +754,313 @@ class CheckSuite(unittest.TestCase):
     def test_mismatch_in_simple_for_statement_expression_1(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-               int c;
+            int a;
+            float b;
+            void main(){
+                int c;
                for(c; c <a; c = c+1){ // Success
                     b = b+1;
                }
                 for(b; c <a; c = c+1){ // Error
                     b = b+1;
                }
-            }
-            int a;
-            float b;
-            void main(){
                 foo(a,b);
             }
         """
         expect = "Type Mismatch In Statement: For(Id(b);BinaryOp(<,Id(c),Id(a));BinaryOp(=,Id(c),BinaryOp(+,Id(c),IntLiteral(1)));Block([BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)))]))"
         self.assertTrue(TestChecker.test(input, expect, 449))
 
-    def test_mismatch_in_simple_for_statement_expression_2_(self):
+    def test_mismatch_in_simple_for_statement_expression_2(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                c;
-            }
-            void main(){
-                 foo(a,b);
+            int a;
+            float b;
+            void main(){  
+                int c;
+               for(c; c == a; c = c+1){ // Success
+                    b = b+1;
+               }
+                for(a; c = a; c = c+1){ // Error
+                    b = b+1;
+               }
             }
         """
-        expect = "Undeclared Identifier: c"
+        expect = "Type Mismatch In Statement: For(Id(a);BinaryOp(=,Id(c),Id(a));BinaryOp(=,Id(c),BinaryOp(+,Id(c),IntLiteral(1)));Block([BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)))]))"
         self.assertTrue(TestChecker.test(input, expect, 450))
 
-    def test42(self):
+    def test_mismatch_in_simple_for_statement_expression_3(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                int c;
-                c = 0;
-                for(c =0; c< a; c = c+1){ // Break in if inside for is ok
-                    if(a % c == 0)
-                        break;
-                    
-                }
-                if(a == c) // this will cause error
-                    break;
+            int a;
+            float b;
+            void main(){
+                 int c;
+               for(c; c < a; c = c+1){ // Success
+                    a = a+1;
+                    c = c + 2;
+               }
+                for(c =0; c = a; b = b +1){ // Error
+                    b = b+1;
+               }
+               return;
+            }
+        """
+        expect = "Type Mismatch In Statement: For(BinaryOp(=,Id(c),IntLiteral(0));BinaryOp(=,Id(c),Id(a));BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)));Block([BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)))]))"
+        self.assertTrue(TestChecker.test(input, expect, 451))
+
+    def test_simple_return_wrong_type_statement(self):
+        """More complex program"""
+        input = """
+            int foo(int a, float b){
+                return b;
+            }
+            void main(){}
+        """
+        expect = "Type Mismatch In Statement: Return(Id(b))"
+        self.assertTrue(TestChecker.test(input, expect, 452))
+
+    def test_return_wrong_array_type(self):
+        """More complex program"""
+        input = """
+            int[] goo(){
+                int a[5];
+                return a;
+            }
+            int[] goo1(){ 
+                float b[5];
+                return b; //Error
             }
             void main(){
-                 foo(a,b);
+                goo();
+                goo1();
+            }
+        """
+        expect = "Type Mismatch In Statement: Return(Id(b))"
+        self.assertTrue(TestChecker.test(input, expect, 453))
+
+    def test_return_something_in_main_function(self):
+        """More complex program"""
+        input = """
+            void main(){
+                return 0;
+            }
+        """
+        expect = "Type Mismatch In Statement: Return(IntLiteral(0))"
+        self.assertTrue(TestChecker.test(input, expect, 454))
+
+    def test_type_mismatch_in_complex_if_statement(self):
+        """More complex program"""
+        input = """
+           int main() {
+            int i;
+            if(i == 1){
+                {
+                i = 5;
+                }
+            }
+            else {
+                {
+                if(i + 2)
+                    i = 0;
+                else 
+                    i = i +1;
+                }
+            }
+            return 0;
+        }
+        """
+        expect = "Type Mismatch In Statement: If(BinaryOp(+,Id(i),IntLiteral(2)),BinaryOp(=,Id(i),IntLiteral(0)),BinaryOp(=,Id(i),BinaryOp(+,Id(i),IntLiteral(1))))"
+        self.assertTrue(TestChecker.test(input, expect, 455))
+
+    def test_type_mismatch_in_complex_do_while(self):
+        """More complex program"""
+        input = """
+            int main() {
+                int i;
+                int n;
+                do{
+                    n = n - 1;
+                    i = i+1;
+                    if( i ==n )
+                        return i;
+                    else
+                        break;
+                }
+                while( i + n);      //Error
+                }
+        """
+        expect = "Type Mismatch In Statement: Dowhile([Block([BinaryOp(=,Id(n),BinaryOp(-,Id(n),IntLiteral(1))),BinaryOp(=,Id(i),BinaryOp(+,Id(i),IntLiteral(1))),If(BinaryOp(==,Id(i),Id(n)),Return(Id(i)),Break())])],BinaryOp(+,Id(i),Id(n)))"
+        self.assertTrue(TestChecker.test(input, expect, 456))
+
+    def test_type_mismatch_in_complex_for_statement(self):
+        """More complex program"""
+        input = """int main() {
+            int a,b,c,e;
+            e = 9;
+            for(a=1;a<=5;a=a+1)
+             {
+                for(b=0; b ;b= b+1)      // Error
+                {
+                    putIntLn(b);
+                }
+                putIntLn(a);
+                e=e-2;
+             }
+        }
+        """
+        expect = "Type Mismatch In Statement: For(BinaryOp(=,Id(b),IntLiteral(0));Id(b);BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)));Block([CallExpr(Id(putIntLn),[Id(b)])]))"
+        self.assertTrue(TestChecker.test(input, expect, 457))
+
+    def test_complex_return_statement(self):
+        """More complex program"""
+        input = """
+            int[] foo(int a){
+                int b[5];
+                return b;
+            }
+            int doo(int a, float b){
+                return foo(2)[3+a];
+            }
+            float goo(int a, float b){
+                return foo(4)[3+a];
+            }
+            void main(){ 
+                int c;
+                float d;
+                doo(c,d);
+                goo(c,d);
+                return;
+            }
+        """
+        expect = "Type Mismatch In Statement: Return(ArrayCell(CallExpr(Id(foo),[IntLiteral(4)]),BinaryOp(+,IntLiteral(3),Id(a))))"
+        self.assertTrue(TestChecker.test(input, expect, 458))
+
+    def test_complex_program_with_mismatch_statement(self):
+        """More complex program"""
+        input = """
+            void main(){ 
+                if(true){
+                    int i;
+                    for(i = 0; i < 10; i = i +1){
+                        do{
+                            int e;
+                            i + 2;
+                        } while( i );  // Error
+                    }
+                }
+            }
+        """
+        expect = "Type Mismatch In Statement: Dowhile([Block([VarDecl(e,IntType),BinaryOp(+,Id(i),IntLiteral(2))])],Id(i))"
+        self.assertTrue(TestChecker.test(input, expect, 459))
+
+    # Test Break, continue
+    def test_simple_break_inside_function(self):
+        """More complex program"""
+        input = """
+            void main(){ 
+                break;  //Error
+                return;
             }
         """
         expect = "Break Not In Loop"
-        self.assertTrue(TestChecker.test(input, expect, 451))
-
-    def test43(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                c;
-            }
-            void main(){}
-        """
-        expect = "Undeclared Identifier: c"
-        self.assertTrue(TestChecker.test(input, expect, 452))
-
-    def test44(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                c;
-            }
-            void main(){}
-        """
-        expect = "Undeclared Identifier: c"
-        self.assertTrue(TestChecker.test(input, expect, 453))
-
-    def test45(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                c;
-            }
-            void main(){}
-        """
-        expect = "Undeclared Identifier: c"
-        self.assertTrue(TestChecker.test(input, expect, 454))
-
-    def test46(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-               
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 455))
-
-    def test47(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 456))
-
-    def test48(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 457))
-
-    def test49(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 458))
-
-    def test50(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 459))
-
-    def test51(self):
-        """More complex program"""
-        input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
-            }
-        """
-        expect = "Unreachable Function: foo"
         self.assertTrue(TestChecker.test(input, expect, 460))
 
-    def test52(self):
+    def test_simple_continue_inside_function(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
             void main(){ 
-
+                continue;  //Error
+                return;
             }
         """
-        expect = "Unreachable Function: foo"
+        expect = "Continue Not In Loop"
         self.assertTrue(TestChecker.test(input, expect, 461))
 
-    def test53(self):
+    def test_break_inside_if_not_in_loop(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
             void main(){ 
-
+                int a;
+                for( a = 0 ; a < 10; a = a+1){
+                    if(a == 5){
+                        break;
+                    }
+                }
+                if(a == 5){
+                        break; // Error
+                }
+                return;
             }
         """
-        expect = "Unreachable Function: foo"
+        expect = "Break Not In Loop"
         self.assertTrue(TestChecker.test(input, expect, 462))
 
-    def test54(self):
+    def test_continue_inside_if_not_in_loop(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
-
+             void main(){ 
+                int a;
+                for( a = 0 ; a < 10; a = a+1){
+                    if(a == 5){
+                        continue;
+                    }
+                }
+                if(a == 5){
+                        continue; // Error
+                }
+                return;
             }
         """
-        expect = "Unreachable Function: foo"
+        expect = "Continue Not In Loop"
         self.assertTrue(TestChecker.test(input, expect, 464))
 
-    def test55(self):
+    def test_complex_mix_continue_break(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
             void main(){ 
-
+                int a;
+                if( true){
+                    for( a = 0 ; a < 10; a = a+1){
+                        if(a == 5){
+                            {
+                            continue;
+                            }
+                        }
+                        do
+                            if(a < 9)
+                                break;
+                            else
+                                continue;
+                        while(a < 10);
+                    }
+                    break;      //Error
+                }
             }
         """
-        expect = "Unreachable Function: foo"
+        expect = "Break Not In Loop"
         self.assertTrue(TestChecker.test(input, expect, 465))
 
+    # Test function not return
     def test56(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
+            int foo() {
+                int a; 
+                if(true) { 
+                    { 
+                        { 
+                        return 2; 
+                        } 
+                    } 
+                } 
+                else 
+                    for(a;a<3;a = a+1) { 
+                        
+                        return 1; 
+                        } 
             }
             void main(){ 
-
+                foo();
             }
         """
         expect = "Unreachable Function: foo"
@@ -996,7 +1096,7 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             void foo(int a, float b){
-                foo(a,b);
+                a + 1 =4;
             }
             void main(){ 
 
