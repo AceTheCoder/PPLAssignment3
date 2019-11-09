@@ -84,7 +84,16 @@ class StaticChecker(BaseVisitor, Utils):
 
     global_envi = [
     Symbol("getInt", MType([], IntType())),
-    Symbol("putIntLn", MType([IntType()], VoidType()))
+    Symbol("putIntLn", MType([IntType()], VoidType())),
+    Symbol("putInt", MType([IntType()], VoidType())),
+    Symbol("getFloat", MType([], FloatType())),
+    Symbol("putFloat", MType([FloatType()], VoidType())),
+    Symbol("putFloatLn", MType([FloatType()], VoidType())),
+    Symbol("putBool", MType([BoolType()], VoidType())),
+    Symbol("putBoolLn", MType([BoolType()], VoidType())),
+    Symbol("putString", MType([StringType()], VoidType())),
+    Symbol("putStringLn", MType([StringType()], VoidType())),
+    Symbol("putLn", MType([], VoidType()))
     ]
 
     def __init__(self, ast):
@@ -162,9 +171,9 @@ class StaticChecker(BaseVisitor, Utils):
         if type(condition) is not BoolType:
             raise TypeMismatchInStatement(ast)
         stmt_list = functools.reduce(lambda y, x: y + [self.visit(x, (scope, function_type, True, function_name, invoked_function))], ast.sl, [])
-        # stmt_type = CheckError.checkReturnStmt(stmt_list)
-        # return [stmt_type] if type(stmt_type) is Return else [None]
-        return [None]
+        stmt_type = CheckError.checkReturnStmt(stmt_list)
+        return [stmt_type] if type(stmt_type) is Return else [None]
+        # return [None]
 
     def visitFor(self, ast, c):
         scope, function_type, in_loop, function_name, invoked_function = c
@@ -194,8 +203,8 @@ class StaticChecker(BaseVisitor, Utils):
 
     def visitReturn(self, ast, c):
         scope, return_type, in_loop, function_name, invoked_function = c
-        exprType = self.visit(ast.expr, c) if ast.expr else VoidType()
-        if not CheckError.checkMatchingType(return_type, exprType):
+        expr_type = self.visit(ast.expr, c) if ast.expr else VoidType()
+        if not CheckError.checkMatchingType(return_type, expr_type):
             raise TypeMismatchInStatement(ast)
         return [Return()]
 
@@ -229,12 +238,8 @@ class StaticChecker(BaseVisitor, Utils):
                 raise NotLeftValue(ast)
             elif type(lefths)in [VoidType, ArrayPointerType, ArrayType]:
                 raise TypeMismatchInExpression(ast)
-            elif type(lefths) is not FloatType:
-                if type(righths) is not type(lefths):
-                    raise TypeMismatchInExpression(ast)
-            else:
-                if type(righths) not in [FloatType, IntType]:
-                    raise TypeMismatchInExpression(ast)
+            elif not CheckError.checkMatchingType(lefths, righths):
+                raise TypeMismatchInExpression(ast)
             return lefths
 
     def visitUnaryOp(self, ast, c):

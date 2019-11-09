@@ -21,7 +21,9 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """void foo() {
         }
-        void main(){}
+        void main(){
+            foo();
+        }
         
         void foo(){ //Error
         }
@@ -133,11 +135,11 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
         int a,b,d;
-        int foo(int a){
+        void foo(int a){
             int c;
             a;
             b + d;
-            m;
+            m;  //Error
         }
         void main() {
                foo(b);   
@@ -155,7 +157,7 @@ class CheckSuite(unittest.TestCase):
             {
                 c;
                 d = a + b;
-                a = m;
+                a = m;  //Error
             }
         }
         int main() {
@@ -169,8 +171,8 @@ class CheckSuite(unittest.TestCase):
         """More complex program"""
         input = """
             void main(){
-                c;
-                int c;
+                c;  //Error
+                int c; 
             }
 
         """
@@ -214,7 +216,7 @@ class CheckSuite(unittest.TestCase):
             void main(){
                 a[2];
                 b[4];
-                c[5]; //Error
+                c[5];   //Error
             }
         """
         expect = "Undeclared Identifier: c"
@@ -246,7 +248,7 @@ class CheckSuite(unittest.TestCase):
                 {
                     foo();
                     foo1(a,b);
-                    foo2();
+                    foo2();     //Error
                 }
             }
             void main(){}
@@ -263,7 +265,7 @@ class CheckSuite(unittest.TestCase):
             float b;
             void main(){
                 foo(getInt(), b);
-                foo(foo1(), b);  //Error
+                foo(foo1(), b);     //Error
             }
         """
         expect = "Undeclared Function: foo1"
@@ -278,7 +280,7 @@ class CheckSuite(unittest.TestCase):
             void main(){
                 int b,a[5];
                 a[b];
-                a[d]; //Error
+                a[d];           //Error
             }
         """
         expect = "Undeclared Identifier: d"
@@ -295,7 +297,7 @@ class CheckSuite(unittest.TestCase):
                 float c;
                 a[b];
                 a[foo(b,c)];
-                a[foo1(b,c)]; // Error
+                a[foo1(b,c)];   // Error
             }
         """
         expect = "Undeclared Function: foo1"
@@ -310,7 +312,7 @@ class CheckSuite(unittest.TestCase):
             int array1[7];
         
             int sum[7]; 
-            for(i = 0; i < 7; i = i +1) // Error
+            for(i = 0; i < 7; i = i +1)    // Error
                     sum[i] = array0[i] + array1[i];
             }
         """
@@ -457,12 +459,12 @@ class CheckSuite(unittest.TestCase):
                 int c,d;
                 boolean e;
                 a > c;
-                (a > c) > d;
-                b > a;
-                e > c; // error
+                (a < c) >= d; // error
+                b <= a;
+                e > c; 
             }
         """
-        expect = "Type Mismatch In Expression: BinaryOp(>,BinaryOp(>,Id(a),Id(c)),Id(d))"
+        expect = "Type Mismatch In Expression: BinaryOp(>=,BinaryOp(<,Id(a),Id(c)),Id(d))"
         self.assertTrue(TestChecker.test(input, expect, 430))
 
     def test_type_mismatch_in_simple_equal_statement(self):
@@ -493,6 +495,35 @@ class CheckSuite(unittest.TestCase):
         expect = "Type Mismatch In Expression: BinaryOp(!=,Id(x),Id(y))"
         self.assertTrue(TestChecker.test(input, expect, 432))
 
+    def test_type_mismatch_in_simple_and_statement(self):
+        """More complex program"""
+        input = """
+              void main(){ 
+                  int a, c;
+                  boolean b, d;
+                  b && d ;
+                  a == c && b; 
+                  a && b;       // Error
+              }
+          """
+        expect = "Type Mismatch In Expression: BinaryOp(&&,Id(a),Id(b))"
+        self.assertTrue(TestChecker.test(input, expect, 433))
+
+    def test_type_mismatch_in_simple_or_statement(self):
+        """More complex program"""
+        input = """
+              void main(){ 
+                 int a, c;
+                  boolean b, d;
+                  b || true ;
+                  false || b; 
+                  b == true || d;
+                  a || false;   // Error
+              }
+          """
+        expect = "Type Mismatch In Expression: BinaryOp(||,Id(a),BooleanLiteral(false))"
+        self.assertTrue(TestChecker.test(input, expect, 434))
+
     def test_type_mismatch_in_simple_assign_statement(self):
         """More complex program"""
         input = """
@@ -511,18 +542,21 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Expression: BinaryOp(=,Id(a),Id(b1))"
-        self.assertTrue(TestChecker.test(input, expect, 433))
+        self.assertTrue(TestChecker.test(input, expect, 435))
 
     def test_pass_less_parameter_to_a_function_call(self):
         """More complex program"""
         input = """
+            int foo(int a){
+                return (a*2);
+            }
             void main(){
-                getInt();
-                getInt(4); //Error
+                foo(4);
+                foo();  //Error
             }
         """
-        expect = "Type Mismatch In Statement: CallExpr(Id(getInt),[IntLiteral(4)])"
-        self.assertTrue(TestChecker.test(input, expect, 434))
+        expect = "Type Mismatch In Statement: CallExpr(Id(foo),[])"
+        self.assertTrue(TestChecker.test(input, expect, 436))
 
     def test_pass_more_parameter_to_a_function_call(self):
         """More complex program"""
@@ -538,7 +572,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: CallExpr(Id(foo),[Id(a),Id(b),IntLiteral(4)])"
-        self.assertTrue(TestChecker.test(input, expect, 435))
+        self.assertTrue(TestChecker.test(input, expect, 437))
 
     def test_pass_wrong_type_to_a_function_call(self):
         """More complex program"""
@@ -548,26 +582,35 @@ class CheckSuite(unittest.TestCase):
             }
             int a;
             void main(){
-               boolean b;
+               int b[5];
                float c[5];
                foo(a, c);
                foo(a, b);
             }
         """
         expect = "Type Mismatch In Statement: CallExpr(Id(foo),[Id(a),Id(b)])"
-        self.assertTrue(TestChecker.test(input, expect, 436))
+        self.assertTrue(TestChecker.test(input, expect, 438))
 
     def test_pass_wrong_type_to_a_function_call_in_an_expression(self):
         """More complex program"""
         input = """
+            void foo(int a, float b){
+                return;
+            }
+            int goo(int a){
+                return a*2;
+            }
             void main(){
                 int a;
                 boolean b;
-                foo(getInt(a),b); // Error
+                float c;
+                foo(goo(4), 1.5);
+                goo( foo(1, 3));    // Error
+
             }
         """
-        expect = "Type Mismatch In Expression: CallExpr(Id(getInt),[Id(a)])"
-        self.assertTrue(TestChecker.test(input, expect, 437))
+        expect = "Type Mismatch In Statement: CallExpr(Id(goo),[CallExpr(Id(foo),[IntLiteral(1),IntLiteral(3)])])"
+        self.assertTrue(TestChecker.test(input, expect, 439))
 
     def test_type_mismatch_in_negative_expression(self):
         """More complex program"""
@@ -578,11 +621,11 @@ class CheckSuite(unittest.TestCase):
                 boolean c;
                 - a;
                 - b;
-                 -c; // Error
+                - c; // Error
             }
         """
         expect = "Type Mismatch In Expression: UnaryOp(-,Id(c))"
-        self.assertTrue(TestChecker.test(input, expect, 438))
+        self.assertTrue(TestChecker.test(input, expect, 440))
 
     def test_type_mismatch_in_simple_not_expression(self):
         """More complex program"""
@@ -597,9 +640,9 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Expression: UnaryOp(!,Id(c))"
-        self.assertTrue(TestChecker.test(input, expect, 439))
+        self.assertTrue(TestChecker.test(input, expect, 441))
 
-    def test_type_mismatch_in_simple_array_expression(self):
+    def test_type_mismatch_in_simple_index_expression(self):
         """More complex program"""
         input = """
         int arr[5];
@@ -612,7 +655,123 @@ class CheckSuite(unittest.TestCase):
                arr[c]; }
         """
         expect = "Type Mismatch In Expression: ArrayCell(Id(arr),Id(b))"
-        self.assertTrue(TestChecker.test(input, expect, 440))
+        self.assertTrue(TestChecker.test(input, expect, 442))
+
+    def test_array_index_mismatch_type_extra_test(self):
+        """More complex program"""
+        input = """
+            void main(){
+                int a, b[5];
+                b[2] = a;
+                b[4] = 0;
+                a[0] = 1;
+            }
+        """
+        expect = "Type Mismatch In Expression: ArrayCell(Id(a),IntLiteral(0))"
+        self.assertTrue(TestChecker.test(input, expect, 443))
+
+    def test_array_passing_in_function_call_expression(self):
+        """More complex program"""
+        input = """
+            int[] foo(int a, int b[]){
+                int c[5];
+                if( a == 0){
+                    c[0] = foo(a-1,b)[0];
+                }
+                return c;
+            }
+            void main(){
+                float c[4];
+                int a[3];
+                foo(1, a);
+                foo(2, foo(3, a));
+                foo(9, c); //Error
+            }
+        """
+        expect = "Type Mismatch In Statement: CallExpr(Id(foo),[IntLiteral(9),Id(c)])"
+        self.assertTrue(TestChecker.test(input, expect, 444))
+
+    def test_build_in_Int_function(self):
+        """More complex program"""
+        input = """
+               void main(){
+                   int a;
+                   a = getInt();
+                   putIntLn(4);
+                   putIntLn(a);
+                   putInt(4);
+                   putInt(a);
+                   putInt("Hello");    //Error
+               }
+           """
+        expect = "Type Mismatch In Statement: CallExpr(Id(putInt),[StringLiteral(Hello)])"
+        self.assertTrue(TestChecker.test(input, expect, 445))
+
+    def test_build_in_Float_function(self):
+        """More complex program"""
+        input = """
+                void main(){
+                   float a;
+                   a = getFloat();
+                   a = getInt();
+                   putFloatLn(4);
+                   putFloatLn(a);
+                   putFloat(4);
+                   putFloat(a);
+                   putFloat(true);
+               }
+           """
+        expect = "Type Mismatch In Statement: CallExpr(Id(putFloat),[BooleanLiteral(true)])"
+        self.assertTrue(TestChecker.test(input, expect, 446))
+
+    def test_build_in_Bool_function(self):
+        """More complex program"""
+        input = """
+              void main(){
+                   boolean x;
+                   x = true;
+                   putBoolLn(true);
+                   putBoolLn(x);
+                   putBool(false);
+                   putBool(x);
+                   putBool(1); //Error
+               }
+           """
+        expect = "Type Mismatch In Statement: CallExpr(Id(putBool),[IntLiteral(1)])"
+        self.assertTrue(TestChecker.test(input, expect, 447))
+
+    def test_build_in_String_function(self):
+        """More complex program"""
+        input = """
+              void main(){
+                   string x;
+                   x = "Goodbye";
+                   putStringLn("Assignment 3");
+                   putStringLn("x");
+                   putString("Hello");
+                   putString(x);
+                   putLn();
+                   putString(169); //Error
+               }
+           """
+        expect = "Type Mismatch In Statement: CallExpr(Id(putString),[IntLiteral(169)])"
+        self.assertTrue(TestChecker.test(input, expect, 448))
+
+    def test_type_mismatch_when_call_function_main(self):
+        """More complex program"""
+        input = """
+             void foo(int a, float b){
+                foo(a,b);
+            }
+            void main(){
+                int a;
+                float b;
+                foo(a,b);
+                main(a);
+            }
+        """
+        expect = "Type Mismatch In Statement: CallExpr(Id(main),[Id(a)])"
+        self.assertTrue(TestChecker.test(input, expect, 449))
 
     def test_complex_int_expression_has_type_mismatch(self):
         """More complex program"""
@@ -627,7 +786,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Expression: BinaryOp(%,BinaryOp(*,IntLiteral(10),Id(d)),Id(c))"
-        self.assertTrue(TestChecker.test(input, expect, 441))
+        self.assertTrue(TestChecker.test(input, expect, 450))
 
     def test_complex_comparison_expression_has_type_mismatch(self):
         """More complex program"""
@@ -645,7 +804,7 @@ class CheckSuite(unittest.TestCase):
         }
         """
         expect = "Type Mismatch In Expression: BinaryOp(==,BinaryOp(||,BinaryOp(>=,BinaryOp(-,CallExpr(Id(foo),[Id(a),Id(c)]),Id(a)),IntLiteral(0)),BinaryOp(<=,BinaryOp(-,Id(a),IntLiteral(1)),IntLiteral(10))),IntLiteral(1))"
-        self.assertTrue(TestChecker.test(input, expect, 442))
+        self.assertTrue(TestChecker.test(input, expect, 451))
 
     def test_complex_assign_expression_with_type_mismatch(self):
         """More complex program"""
@@ -657,13 +816,13 @@ class CheckSuite(unittest.TestCase):
                 int arr[10];
                 int a, b;
                 float x ,y;
-                a = b = 0; // success
+                a = b = 0; 
                 arr[a] = (x + y)/ 2 -10;    // error since right hand side is Float type
                 x = foo(a ,y);
             }
         """
         expect = "Type Mismatch In Expression: BinaryOp(=,ArrayCell(Id(arr),Id(a)),BinaryOp(-,BinaryOp(/,BinaryOp(+,Id(x),Id(y)),IntLiteral(2)),IntLiteral(10)))"
-        self.assertTrue(TestChecker.test(input, expect, 443))
+        self.assertTrue(TestChecker.test(input, expect, 452))
 
     def test_complex_array_index_expression_has_type_mismatch(self):
         """More complex program"""
@@ -681,7 +840,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Expression: ArrayCell(Id(a),BinaryOp(-,BinaryOp(*,Id(x),Id(y)),CallExpr(Id(foo),[Id(x),Id(y)])))"
-        self.assertTrue(TestChecker.test(input, expect, 444))
+        self.assertTrue(TestChecker.test(input, expect, 453))
 
     def test_mix_all_expression(self):
         """More complex program"""
@@ -702,7 +861,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Expression: ArrayCell(CallExpr(Id(foo),[IntLiteral(3)]),BinaryOp(&&,BooleanLiteral(true),BooleanLiteral(false)))"
-        self.assertTrue(TestChecker.test(input, expect, 445))
+        self.assertTrue(TestChecker.test(input, expect, 454))
 
     # Statement checking
     def test_type_mismatch_in_if_statement(self):
@@ -719,7 +878,7 @@ class CheckSuite(unittest.TestCase):
                 }
         """
         expect = "Type Mismatch In Statement: If(Id(b),BinaryOp(+,Id(b),IntLiteral(1)))"
-        self.assertTrue(TestChecker.test(input, expect, 446))
+        self.assertTrue(TestChecker.test(input, expect, 455))
 
     def test_type_mismatch_inside_if_else_statement(self):
         """More complex program"""
@@ -741,7 +900,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: If(Id(b),BinaryOp(+,Id(b),IntLiteral(1)),BinaryOp(+,Id(b),IntLiteral(2)))"
-        self.assertTrue(TestChecker.test(input, expect, 447))
+        self.assertTrue(TestChecker.test(input, expect, 456))
 
     def test_mismatch_type_in_simple_do_while_statement(self):
         """More complex program"""
@@ -759,7 +918,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: Dowhile([BinaryOp(+,Id(b),IntLiteral(1))],Id(b))"
-        self.assertTrue(TestChecker.test(input, expect, 448))
+        self.assertTrue(TestChecker.test(input, expect, 457))
 
     def test_mismatch_in_simple_for_statement_expression_1(self):
         """More complex program"""
@@ -778,7 +937,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: For(Id(b);BinaryOp(<,Id(c),Id(a));BinaryOp(=,Id(c),BinaryOp(+,Id(c),IntLiteral(1)));Block([BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)))]))"
-        self.assertTrue(TestChecker.test(input, expect, 449))
+        self.assertTrue(TestChecker.test(input, expect, 458))
 
     def test_mismatch_in_simple_for_statement_expression_2(self):
         """More complex program"""
@@ -796,7 +955,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: For(Id(a);BinaryOp(=,Id(c),Id(a));BinaryOp(=,Id(c),BinaryOp(+,Id(c),IntLiteral(1)));Block([BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)))]))"
-        self.assertTrue(TestChecker.test(input, expect, 450))
+        self.assertTrue(TestChecker.test(input, expect, 459))
 
     def test_mismatch_in_simple_for_statement_expression_3(self):
         """More complex program"""
@@ -816,7 +975,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: For(BinaryOp(=,Id(c),IntLiteral(0));BinaryOp(=,Id(c),Id(a));BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)));Block([BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)))]))"
-        self.assertTrue(TestChecker.test(input, expect, 451))
+        self.assertTrue(TestChecker.test(input, expect, 460))
 
     def test_simple_return_wrong_type_statement(self):
         """More complex program"""
@@ -827,7 +986,7 @@ class CheckSuite(unittest.TestCase):
             void main(){}
         """
         expect = "Type Mismatch In Statement: Return(Id(b))"
-        self.assertTrue(TestChecker.test(input, expect, 452))
+        self.assertTrue(TestChecker.test(input, expect, 461))
 
     def test_return_wrong_array_type(self):
         """More complex program"""
@@ -846,7 +1005,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: Return(Id(b))"
-        self.assertTrue(TestChecker.test(input, expect, 453))
+        self.assertTrue(TestChecker.test(input, expect, 462))
 
     def test_return_something_in_main_function(self):
         """More complex program"""
@@ -856,7 +1015,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: Return(IntLiteral(0))"
-        self.assertTrue(TestChecker.test(input, expect, 454))
+        self.assertTrue(TestChecker.test(input, expect, 463))
 
     def test_type_mismatch_in_complex_if_statement(self):
         """More complex program"""
@@ -880,7 +1039,7 @@ class CheckSuite(unittest.TestCase):
         }
         """
         expect = "Type Mismatch In Statement: If(BinaryOp(+,Id(i),IntLiteral(2)),BinaryOp(=,Id(i),IntLiteral(0)),BinaryOp(=,Id(i),BinaryOp(+,Id(i),IntLiteral(1))))"
-        self.assertTrue(TestChecker.test(input, expect, 455))
+        self.assertTrue(TestChecker.test(input, expect, 464))
 
     def test_type_mismatch_in_complex_do_while(self):
         """More complex program"""
@@ -900,7 +1059,7 @@ class CheckSuite(unittest.TestCase):
                 }
         """
         expect = "Type Mismatch In Statement: Dowhile([Block([BinaryOp(=,Id(n),BinaryOp(-,Id(n),IntLiteral(1))),BinaryOp(=,Id(i),BinaryOp(+,Id(i),IntLiteral(1))),If(BinaryOp(==,Id(i),Id(n)),Return(Id(i)),Break())])],BinaryOp(+,Id(i),Id(n)))"
-        self.assertTrue(TestChecker.test(input, expect, 456))
+        self.assertTrue(TestChecker.test(input, expect, 465))
 
     def test_type_mismatch_in_complex_for_statement(self):
         """More complex program"""
@@ -919,7 +1078,7 @@ class CheckSuite(unittest.TestCase):
         }
         """
         expect = "Type Mismatch In Statement: For(BinaryOp(=,Id(b),IntLiteral(0));Id(b);BinaryOp(=,Id(b),BinaryOp(+,Id(b),IntLiteral(1)));Block([CallExpr(Id(putIntLn),[Id(b)])]))"
-        self.assertTrue(TestChecker.test(input, expect, 457))
+        self.assertTrue(TestChecker.test(input, expect, 466))
 
     def test_complex_return_statement(self):
         """More complex program"""
@@ -943,7 +1102,31 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: Return(ArrayCell(CallExpr(Id(foo),[IntLiteral(4)]),BinaryOp(+,IntLiteral(3),Id(a))))"
-        self.assertTrue(TestChecker.test(input, expect, 458))
+        self.assertTrue(TestChecker.test(input, expect, 467))
+
+    def test_return_wrong_type_inside_if(self):
+        """More complex program"""
+        input = """
+            int foo(){
+                boolean a;
+                if(a){
+                    int b;
+                    b = 1;
+                    return b;
+                }
+                else{
+                    float c;
+                    c = 0;
+                    return c;  //Error
+                }
+
+            }
+            void main(){
+                foo();
+            }
+        """
+        expect = "Type Mismatch In Statement: Return(Id(c))"
+        self.assertTrue(TestChecker.test(input, expect, 468))
 
     def test_complex_program_with_mismatch_statement(self):
         """More complex program"""
@@ -961,7 +1144,34 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Type Mismatch In Statement: Dowhile([Block([VarDecl(e,IntType),BinaryOp(+,Id(i),IntLiteral(2))])],Id(i))"
-        self.assertTrue(TestChecker.test(input, expect, 459))
+        self.assertTrue(TestChecker.test(input, expect, 469))
+
+    def test_complex_mismatch_type_return_extra_test(self):
+        """More complex program"""
+        input = """
+            int[] foo(int a, int b[]){
+                return b;
+            }
+            int foo1(int a){
+                int c[5];
+                return foo(a,c)[10]; 
+            }
+            float foo2(int a){
+                return foo1(a); 
+            }
+             boolean foo3(int a){
+                return foo1(a) == a;
+            }
+            boolean foo4(int a){
+                return foo1(a) == foo2(a);  // Error
+            }
+            void main(){
+                int a;
+                foo3(a);
+            }
+        """
+        expect = "Type Mismatch In Expression: BinaryOp(==,CallExpr(Id(foo1),[Id(a)]),CallExpr(Id(foo2),[Id(a)]))"
+        self.assertTrue(TestChecker.test(input, expect, 470))
 
     # Test Break, continue
     def test_simple_break_inside_function(self):
@@ -973,7 +1183,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Break Not In Loop"
-        self.assertTrue(TestChecker.test(input, expect, 460))
+        self.assertTrue(TestChecker.test(input, expect, 471))
 
     def test_simple_continue_inside_function(self):
         """More complex program"""
@@ -984,7 +1194,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Continue Not In Loop"
-        self.assertTrue(TestChecker.test(input, expect, 461))
+        self.assertTrue(TestChecker.test(input, expect, 472))
 
     def test_break_inside_if_not_in_loop(self):
         """More complex program"""
@@ -1003,7 +1213,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Break Not In Loop"
-        self.assertTrue(TestChecker.test(input, expect, 462))
+        self.assertTrue(TestChecker.test(input, expect, 473))
 
     def test_continue_inside_if_not_in_loop(self):
         """More complex program"""
@@ -1022,7 +1232,22 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Continue Not In Loop"
-        self.assertTrue(TestChecker.test(input, expect, 464))
+        self.assertTrue(TestChecker.test(input, expect, 474))
+
+    def test_continue_break_inside_block_statement(self):
+        """More complex program"""
+        input = """
+             void main(){ 
+                {
+                    {  
+                        break;
+                    }
+                }
+                return;
+            }
+        """
+        expect = "Break Not In Loop"
+        self.assertTrue(TestChecker.test(input, expect, 475))
 
     def test_complex_mix_continue_break(self):
         """More complex program"""
@@ -1048,7 +1273,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Break Not In Loop"
-        self.assertTrue(TestChecker.test(input, expect, 465))
+        self.assertTrue(TestChecker.test(input, expect, 476))
 
     # Test function not return
     def test_simple_not_return_function(self):
@@ -1065,9 +1290,9 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function foo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 466))
+        self.assertTrue(TestChecker.test(input, expect, 477))
 
-    def test_if_path_return_function(self):
+    def test_return_in_if(self):
         """More complex program"""
         input = """
             int goo(){
@@ -1076,7 +1301,7 @@ class CheckSuite(unittest.TestCase):
                 else
                     return 2;
             }
-            int foo(){  //Error
+            int foo(){          //Error
                 if(true)
                     return 1;
             }
@@ -1085,9 +1310,9 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function foo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 467))
+        self.assertTrue(TestChecker.test(input, expect, 478))
 
-    def test_return_path_in_while(self):
+    def test_return_in_do_while(self):
         """More complex program"""
         input = """
             int goo(){
@@ -1100,7 +1325,7 @@ class CheckSuite(unittest.TestCase):
             }
             int foo(){      //Error
                 do{
-                    return 0;
+                    
                 }
                 while(true);
             }
@@ -1110,9 +1335,9 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function foo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 468))
+        self.assertTrue(TestChecker.test(input, expect, 479))
 
-    def test_return_path_in_for(self):
+    def test_return_in_for(self):
         """More complex program"""
         input = """
             int foo(){
@@ -1134,9 +1359,9 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function goo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 469))
+        self.assertTrue(TestChecker.test(input, expect, 480))
 
-    def test_return_after_break_in_loop(self):
+    def test_return_after_break_in_for_loop(self):
         """More complex program"""
         input = """
              int foo(){
@@ -1164,9 +1389,9 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function goo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 470))
+        self.assertTrue(TestChecker.test(input, expect, 481))
 
-    def test_return_after_continue_in_loop(self):
+    def test_return_after_continue_in_for_loop(self):
         """More complex program"""
         input = """
             int foo(){
@@ -1194,7 +1419,7 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function goo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 471))
+        self.assertTrue(TestChecker.test(input, expect, 482))
 
     def test_no_return_in_loop(self):
         """More complex program"""
@@ -1222,7 +1447,57 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function doo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 472))
+        self.assertTrue(TestChecker.test(input, expect, 483))
+
+    def test_return_after_break_in_do_while_loop(self):
+        """More complex program"""
+        input = """
+            int foo() { 
+                do
+                    return 1;
+                    break;
+                while(false);
+            }
+            
+            int goo(){          //Error
+                do  
+                    break;
+                    return 1;   
+                    
+                while(false);
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function goo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 484))
+
+    def test_return_after_continue_in_do_while_loop(self):
+        """More complex program"""
+        input = """
+            int foo() { 
+                do
+                    return 1;
+                    continue;
+                while(false);
+            }
+            
+            int goo(){          //Error
+                do  
+                    continue;
+                    return 1;   
+                    
+                while(false);
+            }
+            void main(){ 
+                foo();
+                goo();
+            }
+        """
+        expect = "Function goo Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 485))
 
     def test_complex_function_no_return_error(self):
         """More complex program"""
@@ -1246,7 +1521,22 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function foo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 473))
+        self.assertTrue(TestChecker.test(input, expect, 486))
+
+    def test_function_main_not_return(self):
+        """More complex program"""
+        input = """
+             void foo(int a, float b){
+                 foo(a,b);
+             }
+             int main(){
+                 int a;
+                 float b;
+                 foo(a,b);
+             }
+         """
+        expect = "Function main Not Return "
+        self.assertTrue(TestChecker.test(input, expect, 487))
 
     def test_complex_function_no_return_error_extra_test(self):
         """More complex program"""
@@ -1271,109 +1561,251 @@ class CheckSuite(unittest.TestCase):
             }
         """
         expect = "Function foo Not Return "
-        self.assertTrue(TestChecker.test(input, expect, 474))
+        self.assertTrue(TestChecker.test(input, expect, 488))
 
-    def test65(self):
+    # Test unreachable function
+    def test_simple_reachable_function(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
+            void foo(int a, float b){ //Error
             }
             void main(){ 
 
             }
         """
         expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 475))
+        self.assertTrue(TestChecker.test(input, expect, 489))
 
-    def test66(self):
+    def test_unreachable_function_with_more_function(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
+            void doo(){}
+            void foo(){
+                doo();
+            }
+            void goo(int a, float b){ // Error
+                foo();
             }
             void main(){ 
-
+         
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 476))
+        expect = "Unreachable Function: goo"
+        self.assertTrue(TestChecker.test(input, expect, 490))
 
-    def test67(self):
+    def test_recursive_function_not_invoked(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
-            void main(){ 
+               void foo(int a, float b){
+                   foo(a,b);
+               }
+               void main(){
 
-            }
-        """
+               }
+           """
         expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 477))
+        self.assertTrue(TestChecker.test(input, expect, 491))
 
-    def test68(self):
+    def test_complex_program_with_unreachable_function(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
+            void func1(){}
+            void doo(){}
+            void foo(){
+                {
+                    func1();
+                }
+            }
+            void goo(int a, float b){ // Error
+                doo();
+                {
+                        foo();
+                }
             }
             void main(){ 
-
+                func1();
+                if(true){
+                    foo();
+                }
+                else
+                    doo();
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 478))
+        expect = "Unreachable Function: goo"
+        self.assertTrue(TestChecker.test(input, expect, 492))
 
-    def test69(self):
+    # Test Not left value
+    def test_simple_literal_on_left_side_of_assignment(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
             void main(){ 
-
+                int a;
+                a = 3;
+                3 = a;
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 479))
+        expect = "Not Left Value: BinaryOp(=,IntLiteral(3),Id(a))"
+        self.assertTrue(TestChecker.test(input, expect, 493))
 
-    def test70(self):
+    def test_simple_binary_operation_on_left_side_of_assignment(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
             void main(){ 
-
+                int a;
+                a = a +3;
+                a + 3 =10;
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 480))
+        expect = "Not Left Value: BinaryOp(=,BinaryOp(+,Id(a),IntLiteral(3)),IntLiteral(10))"
+        self.assertTrue(TestChecker.test(input, expect, 494))
 
-    def test71(self):
+    def test_simple_unary_operation_on_left_side_of_assignment(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
-            }
             void main(){ 
-
+                float ace;
+                ace = -1.5234;
+                -ace = 1.5234;  //Error
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 481))
+        expect = "Not Left Value: BinaryOp(=,UnaryOp(-,Id(ace)),FloatLiteral(1.5234))"
+        self.assertTrue(TestChecker.test(input, expect, 495))
 
-    def test72(self):
+    def test_call_expression_on_left_side_of_assignment(self):
         """More complex program"""
         input = """
-            void foo(int a, float b){
-                foo(a,b);
+            int foo(int a){
+                return a*a;
             }
-            void main(){ 
-
+            void main(){
+                int c, d[5];
+                c = foo(10);
+                d[4] = foo(5);
+                foo(8) = c;
             }
         """
-        expect = "Unreachable Function: foo"
-        self.assertTrue(TestChecker.test(input, expect, 482))
+        expect = "Not Left Value: BinaryOp(=,CallExpr(Id(foo),[IntLiteral(8)]),Id(c))"
+        self.assertTrue(TestChecker.test(input, expect, 496))
 
+    def test_check_mix_expression_on_left_side_of_assignment_expression(self):
+        """More complex program"""
+        input = """
+            int[] foo(){
+                int a[5];
+                return a;
+            }
+            void main(){
+                int a;
+                a = 1+ 2 * 4 / 3 % 5;
+                (a) = 3;
+                foo()[4] = 2;
+                (foo()[4] -a) = 1; //Error
+            }
+        """
+        expect = "Not Left Value: BinaryOp(=,BinaryOp(-,ArrayCell(CallExpr(Id(foo),[]),IntLiteral(4)),Id(a)),IntLiteral(1))"
+        self.assertTrue(TestChecker.test(input, expect, 497))
+
+    # CHECKING type mismatch - extra-check
+    def test_swap_program_for_type_mismatch(self):
+        """More complex program"""
+        input = """
+            void main(){
+            int x , y , temp;
+            x = 10;
+            y =15;
+            temp = x;
+            x = y;
+            y = temp;
+            putString("x = %d and y = %d", x, y); //Error
+        }
+        """
+        expect = "Type Mismatch In Statement: CallExpr(Id(putString),[StringLiteral(x = %d and y = %d),Id(x),Id(y)])"
+        self.assertTrue(TestChecker.test(input, expect, 498))
+
+    def test_complex_program(self):
+        """More complex program"""
+        input = """
+            int foo(int a, float b){
+                if(a == 0){
+                    if( b < 10){
+                        do{
+                            return 1;
+                        }
+                        while( a < 10);
+                    }
+                    else{
+                        int i;
+                        for(i = 0; i < b; i = i+1){
+                            i = b/2 +i;         // Error
+                        }
+                    }
+                }
+                else{
+                    do{
+                        return 0;
+                    }
+                    while(a == 1);
+                }
+            }
+            void main(){
+                foo(1,1.5);
+            }
+        """
+        expect = "Type Mismatch In Expression: BinaryOp(=,Id(i),BinaryOp(+,BinaryOp(/,Id(b),IntLiteral(2)),Id(i)))"
+        self.assertTrue(TestChecker.test(input, expect, 499))
+
+    def test_complex_program_has_type_mismatch(self):
+        """More complex program"""
+        input = """
+            void main(){
+                int a;
+                a =0;
+                if(true){
+                    int a;
+                    {
+                        {
+                        a =10;
+                            {
+                                do{
+                                    a = a+ 1;
+                                }while( a <100);
+                            }
+                        }
+                    }
+                }
+                else{
+                    for( a= 0; true; a = a+1){
+                        if(a != 5){
+                            float c;
+                            c = a;
+                            {
+                                if( c % 2 != 0){ // Error
+                                    return;
+                                }
+                            }
+                        }
+                        else{
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        """
+        expect = "Type Mismatch In Expression: BinaryOp(%,Id(c),IntLiteral(2))"
+        self.assertTrue(TestChecker.test(input, expect, 500))
+
+    # def test_complex_mismatch_type_return_extra_test_1(self):
+    #     """More complex program"""
+    #     input = """
+    #     int pow(int pow) {
+    #         return pow;
+    #     }
+    #
+    #     void main() {
+    #         pow(4);
+    #     }
+    #     """
+    #     expect = "Type Mismatch In Expression: BinaryOp(==,CallExpr(Id(foo1),[Id(a)]),CallExpr(Id(foo2),[Id(a)]))"
+    #     self.assertTrue(TestChecker.test(input, expect, 501))
